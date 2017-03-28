@@ -62,29 +62,29 @@ fn is_null(request: MPI_Request) -> bool {
 /// 3.7.1
 #[must_use]
 #[derive(Debug)]
-pub struct Request<'a, S: Scope<'a> = StaticScope>(WaitGuard<'a, S>);
+pub struct Request<'a, S: Scope<'a> = StaticScope, D = ()>(WaitGuard<'a, S, D>);
 
-unsafe impl<'a, S: Scope<'a>> AsRaw for Request<'a, S> {
+unsafe impl<'a, S: Scope<'a>, D> AsRaw for Request<'a, S, D> {
     type Raw = MPI_Request;
     fn as_raw(&self) -> Self::Raw {
         self.0.as_raw()
     }
 }
 
-impl<'a, S: Scope<'a>> Drop for Request<'a, S> {
+impl<'a, S: Scope<'a>, D> Drop for Request<'a, S, D> {
     fn drop(&mut self) {
         panic!("request was dropped without being completed");
     }
 }
 
-impl<'a, S: Scope<'a>> From<WaitGuard<'a, S>> for Request<'a, S> {
-    fn from(guard: WaitGuard<'a, S>) -> Self {
+impl<'a, S: Scope<'a>, D> From<WaitGuard<'a, S, D>> for Request<'a, S, D> {
+    fn from(guard: WaitGuard<'a, S, D>) -> Self {
         Request(guard)
     }
 }
 
-impl<'a, S: Scope<'a>> From<CancelGuard<'a, S>> for Request<'a, S> {
-    fn from(mut guard: CancelGuard<'a, S>) -> Self {
+impl<'a, S: Scope<'a>, D> From<CancelGuard<'a, S, D>> for Request<'a, S, D> {
+    fn from(mut guard: CancelGuard<'a, S, D>) -> Self {
         // unwrapping an object that implements Drop is tricky
         Request(unsafe {
             let inner = mem::replace(&mut guard.0, mem::uninitialized());
@@ -95,6 +95,13 @@ impl<'a, S: Scope<'a>> From<CancelGuard<'a, S>> for Request<'a, S> {
 }
 
 impl<'a, S: Scope<'a>> Request<'a, S> {
+    /// Same as `from_raw_with` but without data.
+    pub unsafe fn from_raw(request: MPI_Request, scope: S) -> Self {
+        Self::from_raw_with(request, scope, ())
+    }
+}
+
+impl<'a, S: Scope<'a>, D> Request<'a, S, D> {
     /// Construct a request object from the raw MPI type.
     ///
     /// # Requirements
@@ -104,14 +111,14 @@ impl<'a, S: Scope<'a>> Request<'a, S> {
     /// - All buffers associated with the request must outlive `'a`.
     /// - The request must not be registered with the given scope.
     ///
-    pub unsafe fn from_raw(request: MPI_Request, scope: S) -> Self {
-        Request(WaitGuard::from_raw(request, scope))
+    pub unsafe fn from_raw_with(request: MPI_Request, scope: S, data: D) -> Self {
+        Request(WaitGuard::from_raw(request, scope, data))
     }
 
     /// Unregister the request object from its scope and deconstruct it into its raw parts.
     ///
     /// This is unsafe because the request may outlive its associated buffers.
-    pub unsafe fn into_raw(self) -> (MPI_Request, S) {
+    pub unsafe fn into_raw(self) -> (MPI_Request, S, D) {
         WaitGuard::from(self).into_raw()
     }
 
@@ -126,12 +133,12 @@ impl<'a, S: Scope<'a>> Request<'a, S> {
     /// # Standard section(s)
     ///
     /// 3.7.3
-    pub fn wait(self) -> Status {
+    pub fn wait(self) -> (Status, D) {
         unsafe {
             let mut status: MPI_Status = mem::uninitialized();
             self.0.raw_wait(Some(&mut status));
-            self.into_raw();
-            Status::from_raw(status)
+            let (_, _, data) = self.into_raw();
+            (Status::from_raw(status), data)
         }
     }
 
@@ -142,10 +149,11 @@ impl<'a, S: Scope<'a>> Request<'a, S> {
     /// # Standard section(s)
     ///
     /// 3.7.3
-    pub fn wait_without_status(self) {
+    pub fn wait_without_status(self) -> D {
         unsafe {
             self.0.raw_wait(None);
-            self.into_raw();
+            let (_, _, data) = self.into_raw();
+            data
         }
     }
 
@@ -161,7 +169,7 @@ impl<'a, S: Scope<'a>> Request<'a, S> {
     /// # Standard section(s)
     ///
     /// 3.7.3
-    pub fn test(self) -> Result<Status, Self> {
+    pub fn test(self) -> Result<(Status, D), Self> {
         unsafe {
             let mut status: MPI_Status = mem::uninitialized();
             let mut flag: c_int = mem::uninitialized();
@@ -169,8 +177,8 @@ impl<'a, S: Scope<'a>> Request<'a, S> {
             ffi::MPI_Test(&mut request, &mut flag, &mut status);
             if flag != 0 {
                 assert!(is_null(request));  // persistent requests are not supported
-                self.into_raw();
-                Ok(Status::from_raw(status))
+                let (_, _, data) = self.into_raw();
+                Ok((Status::from_raw(status), data))
             } else {
                 Err(self)
             }
@@ -197,12 +205,12 @@ impl<'a, S: Scope<'a>> Request<'a, S> {
     }
 
     /// Reduce the scope of a request.
-    pub fn shrink_scope_to<'b, S2>(self, scope: S2) -> Request<'b, S2>
+    pub fn shrink_scope_to<'b, S2>(self, scope: S2) -> Request<'b, S2, D>
         where 'a: 'b, S2: Scope<'b>
     {
         unsafe {
-            let (request, _) = self.into_raw();
-            Request::from_raw(request, scope)
+            let (request, _, data) = self.into_raw();
+            Request::from_raw_with(request, scope, data)
         }
     }
 }
@@ -215,13 +223,14 @@ impl<'a, S: Scope<'a>> Request<'a, S> {
 ///
 /// See `examples/immediate.rs`
 #[derive(Debug)]
-pub struct WaitGuard<'a, S: Scope<'a> = StaticScope> {
+pub struct WaitGuard<'a, S: Scope<'a> = StaticScope, D = ()> {
     request: MPI_Request,
     scope: S,
+    data: D,
     phantom: PhantomData<RefCell<&'a ()>>,
 }
 
-impl<'a, S: Scope<'a>> Drop for WaitGuard<'a, S> {
+impl<'a, S: Scope<'a>, D> Drop for WaitGuard<'a, S, D> {
     fn drop(&mut self) {
         unsafe {
             self.raw_wait(None);
@@ -230,15 +239,15 @@ impl<'a, S: Scope<'a>> Drop for WaitGuard<'a, S> {
     }
 }
 
-unsafe impl<'a, S: Scope<'a>> AsRaw for WaitGuard<'a, S> {
+unsafe impl<'a, S: Scope<'a>, D> AsRaw for WaitGuard<'a, S, D> {
     type Raw = MPI_Request;
     fn as_raw(&self) -> Self::Raw {
         self.request
     }
 }
 
-impl<'a, S: Scope<'a>> From<Request<'a, S>> for WaitGuard<'a, S> {
-    fn from(mut req: Request<'a, S>) -> Self {
+impl<'a, S: Scope<'a>, D> From<Request<'a, S, D>> for WaitGuard<'a, S, D> {
+    fn from(mut req: Request<'a, S, D>) -> Self {
         unsafe {
             let inner = mem::replace(&mut req.0, mem::uninitialized());
             mem::forget(req);
@@ -247,7 +256,7 @@ impl<'a, S: Scope<'a>> From<Request<'a, S>> for WaitGuard<'a, S> {
     }
 }
 
-impl<'a, S: Scope<'a>> WaitGuard<'a, S> {
+impl<'a, S: Scope<'a>, D> WaitGuard<'a, S, D> {
     /// Construct a request object from the raw MPI type.
     ///
     /// # Requirements
@@ -257,22 +266,23 @@ impl<'a, S: Scope<'a>> WaitGuard<'a, S> {
     /// - All buffers associated with the request must outlive `'a`.
     /// - The request must not be registered with the given scope.
     ///
-    unsafe fn from_raw(request: MPI_Request, scope: S) -> Self {
+    unsafe fn from_raw(request: MPI_Request, scope: S, data: D) -> Self {
         debug_assert!(!is_null(request));
         scope.register(request);
-        WaitGuard { request: request, scope: scope, phantom: Default::default() }
+        WaitGuard { request: request, scope: scope, data: data, phantom: Default::default() }
     }
 
     /// Unregister the request object from its scope and deconstruct it into its raw parts.
     ///
     /// This is unsafe because the request may outlive its associated buffers.
-    unsafe fn into_raw(mut self) -> (MPI_Request, S) {
+    unsafe fn into_raw(mut self) -> (MPI_Request, S, D) {
         let request = self.as_raw();
         let scope = mem::replace(&mut self.scope, mem::uninitialized());
+        let data = mem::replace(&mut self.data, mem::uninitialized());
         mem::replace(&mut self.phantom, mem::uninitialized());
         mem::forget(self);
         scope.unregister(&request);
-        (request, scope)
+        (request, scope, data)
     }
 
     /// Wait for the request to finish.
@@ -306,16 +316,16 @@ impl<'a, S: Scope<'a>> WaitGuard<'a, S> {
 ///
 /// See `examples/immediate.rs`
 #[derive(Debug)]
-pub struct CancelGuard<'a, S: Scope<'a> = StaticScope>(WaitGuard<'a, S>);
+pub struct CancelGuard<'a, S: Scope<'a> = StaticScope, D = ()>(WaitGuard<'a, S, D>);
 
-impl<'a, S: Scope<'a>> Drop for CancelGuard<'a, S> {
+impl<'a, S: Scope<'a>, D> Drop for CancelGuard<'a, S, D> {
     fn drop(&mut self) {
         self.0.cancel();
     }
 }
 
-impl<'a, S: Scope<'a>> From<Request<'a, S>> for CancelGuard<'a, S> {
-    fn from(req: Request<'a, S>) -> Self {
+impl<'a, S: Scope<'a>, D> From<Request<'a, S, D>> for CancelGuard<'a, S, D> {
+    fn from(req: Request<'a, S, D>) -> Self {
         CancelGuard(WaitGuard::from(req))
     }
 }
@@ -370,7 +380,7 @@ impl<'a> Drop for LocalScope<'a> {
     fn drop(&mut self) {
         for &request in &*self.requests.borrow() {
             unsafe {
-                let _ = WaitGuard::from_raw(request, StaticScope);
+                let _ = WaitGuard::from_raw(request, StaticScope, ());
             }
         }
     }

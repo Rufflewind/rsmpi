@@ -44,6 +44,8 @@
 use std::mem;
 use std::borrow::Borrow;
 use std::os::raw::c_void;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use conv::ConvUtil;
 
@@ -57,7 +59,8 @@ use raw::traits::*;
 /// Datatype traits
 pub mod traits {
     pub use super::{Equivalence, Datatype, AsDatatype, Collection, Pointer, PointerMut, Buffer,
-                    BufferMut, Partitioned, PartitionedBuffer, PartitionedBufferMut};
+                    BufferMut, Partitioned, PartitionedBuffer, PartitionedBufferMut,
+                    ReadBuffer, WriteBuffer};
 }
 
 /// A system datatype, e.g. `MPI_FLOAT`
@@ -728,4 +731,198 @@ pub fn address_of<T>(x: &T) -> Address {
         ffi::MPI_Get_address(x as *const c_void, &mut address);
     }
     address
+}
+
+/// Implements a buffer with a known length.
+/// TODO: rename this into something else
+pub trait Buffre {
+    /// The type each element.
+    type Item: Equivalence;
+
+    /// The type of of its anchor.
+    type Anchor;
+
+    /// Convert the buffer into its anchor.  Holding the anchor should be
+    /// sufficient to keep the buffer alive.
+    fn into_anchor(self) -> Self::Anchor;
+
+    /// Length of the buffer.
+    fn len(&self) -> usize;
+
+    /// Length of the buffer in `Count`.
+    /// TODO: turn this into a private helper function.
+    fn count(&self) -> Count {
+        self.len().value_as().expect("Length of buffer cannot be expressed as an MPI Count.")
+    }
+
+    /// Get the MPI data type.
+    /// TODO: turn this into a private helper function.
+    fn as_datatype(&self) -> <Self::Item as Equivalence>::Out {
+        Self::Item::equivalent_datatype()
+    }
+}
+
+impl<'a, T: Equivalence> Buffre for &'a T {
+    type Item = T;
+    type Anchor = ();
+    fn into_anchor(self) -> Self::Anchor {}
+    fn len(&self) -> usize { 1 }
+}
+
+impl<'a, T: Equivalence> Buffre for &'a mut T {
+    type Item = T;
+    type Anchor = ();
+    fn into_anchor(self) -> Self::Anchor {}
+    fn len(&self) -> usize { 1 }
+}
+
+impl<'a, T: Equivalence> Buffre for &'a [T] {
+    type Item = T;
+    type Anchor = ();
+    fn into_anchor(self) -> Self::Anchor {}
+    fn len(&self) -> usize { (*self).len() }
+}
+
+impl<'a, T: Equivalence> Buffre for &'a mut [T] {
+    type Item = T;
+    type Anchor = ();
+    fn into_anchor(self) -> Self::Anchor {}
+    fn len(&self) -> usize { (**self).len() }
+}
+
+impl<'a, T: Equivalence> Buffre for Box<T> {
+    type Item = T;
+    type Anchor = Self;
+    fn into_anchor(self) -> Self::Anchor { self }
+    fn len(&self) -> usize { 1 }
+}
+
+impl<'a, T: Equivalence> Buffre for Box<[T]> {
+    type Item = T;
+    type Anchor = Self;
+    fn into_anchor(self) -> Self::Anchor { self }
+    fn len(&self) -> usize { (**self).len() }
+}
+
+impl<'a, T: Equivalence> Buffre for Vec<T> {
+    type Item = T;
+    type Anchor = Self;
+    fn into_anchor(self) -> Self::Anchor { self }
+    fn len(&self) -> usize { self.len() }
+}
+
+impl<'a, T: Equivalence> Buffre for Rc<T> {
+    type Item = T;
+    type Anchor = Self;
+    fn into_anchor(self) -> Self::Anchor { self }
+    fn len(&self) -> usize { 1 }
+}
+
+impl<'a, T: Equivalence> Buffre for Rc<Vec<T>> {
+    type Item = T;
+    type Anchor = Self;
+    fn into_anchor(self) -> Self::Anchor { self }
+    fn len(&self) -> usize { (**self).len() }
+}
+
+impl<'a, T: Equivalence> Buffre for Arc<T> {
+    type Item = T;
+    type Anchor = Self;
+    fn into_anchor(self) -> Self::Anchor { self }
+    fn len(&self) -> usize { 1 }
+}
+
+impl<'a, T: Equivalence> Buffre for Arc<Vec<T>> {
+    type Item = T;
+    type Anchor = Self;
+    fn into_anchor(self) -> Self::Anchor { self }
+    fn len(&self) -> usize { (**self).len() }
+}
+
+/// Implements buffers that can be read from.
+pub unsafe trait ReadBuffer: Buffre {
+    /// Return a pointer to the beginning of the buffer.
+    fn as_ptr(&self) -> *const Self::Item;
+
+    /// Return the pointer as a `*mut c_void`;
+    /// TODO: turn this into a private helper function.
+    fn pointer(&self) -> *const c_void {
+        self.as_ptr() as *const _
+    }
+}
+
+unsafe impl<'a, T: Equivalence> ReadBuffer for &'a T {
+    fn as_ptr(&self) -> *const Self::Item { *self }
+}
+
+unsafe impl<'a, T: Equivalence> ReadBuffer for &'a mut T {
+    fn as_ptr(&self) -> *const Self::Item { &**self }
+}
+
+unsafe impl<'a, T: Equivalence> ReadBuffer for &'a [T] {
+    fn as_ptr(&self) -> *const Self::Item { (*self).as_ptr() }
+}
+
+unsafe impl<'a, T: Equivalence> ReadBuffer for &'a mut [T] {
+    fn as_ptr(&self) -> *const Self::Item { (&**self).as_ptr() }
+}
+
+unsafe impl<'a, T: Equivalence> ReadBuffer for Box<T> {
+    fn as_ptr(&self) -> *const Self::Item { &**self }
+}
+
+unsafe impl<'a, T: Equivalence> ReadBuffer for Box<[T]> {
+    fn as_ptr(&self) -> *const Self::Item { (**self).as_ptr() }
+}
+
+unsafe impl<'a, T: Equivalence> ReadBuffer for Vec<T> {
+    fn as_ptr(&self) -> *const Self::Item { (**self).as_ptr() }
+}
+
+unsafe impl<'a, T: Equivalence> ReadBuffer for Rc<T> {
+    fn as_ptr(&self) -> *const Self::Item { &**self }
+}
+
+unsafe impl<'a, T: Equivalence> ReadBuffer for Rc<Vec<T>> {
+    fn as_ptr(&self) -> *const Self::Item { (**self).as_ptr() }
+}
+
+unsafe impl<'a, T: Equivalence> ReadBuffer for Arc<T> {
+    fn as_ptr(&self) -> *const Self::Item { &**self }
+}
+
+unsafe impl<'a, T: Equivalence> ReadBuffer for Arc<Vec<T>> {
+    fn as_ptr(&self) -> *const Self::Item { (**self).as_ptr() }
+}
+
+/// Implements buffers that can be written to.
+pub unsafe trait WriteBuffer: Buffre {
+    /// Return a pointer to the beginning of the buffer.
+    fn as_mut_ptr(&mut self) -> *mut Self::Item;
+
+    /// Return the pointer as a `*mut c_void`;
+    /// TODO: turn this into a private helper function.
+    fn pointer_mut(&mut self) -> *mut c_void {
+        self.as_mut_ptr() as *mut _
+    }
+}
+
+unsafe impl<'a, T: Equivalence> WriteBuffer for &'a mut T {
+    fn as_mut_ptr(&mut self) -> *mut Self::Item { *self }
+}
+
+unsafe impl<'a, T: Equivalence> WriteBuffer for &'a mut [T] {
+    fn as_mut_ptr(&mut self) -> *mut Self::Item { (*self).as_mut_ptr() }
+}
+
+unsafe impl<'a, T: Equivalence> WriteBuffer for Box<T> {
+    fn as_mut_ptr(&mut self) -> *mut Self::Item { &mut **self }
+}
+
+unsafe impl<'a, T: Equivalence> WriteBuffer for Box<[T]> {
+    fn as_mut_ptr(&mut self) -> *mut Self::Item { (**self).as_mut_ptr() }
+}
+
+unsafe impl<'a, T: Equivalence> WriteBuffer for Vec<T> {
+    fn as_mut_ptr(&mut self) -> *mut Self::Item { (**self).as_mut_ptr() }
 }

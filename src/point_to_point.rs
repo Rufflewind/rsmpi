@@ -244,12 +244,12 @@ pub unsafe trait Source: AsCommunicator {
     /// # Standard section(s)
     ///
     /// 3.7.2
-    fn immediate_receive_into_with_tag<'a, Sc, Buf: ?Sized>(&self,
-                                                            scope: Sc,
-                                                            buf: &'a mut Buf,
-                                                            tag: Tag)
-                                                            -> Request<'a, Sc>
-        where Buf: 'a + BufferMut,
+    fn immediate_receive_into_with_tag<'a, Sc, Buf>(&self,
+                                                    scope: Sc,
+                                                    mut buf: Buf,
+                                                    tag: Tag)
+                                                    -> Request<'a, Sc, Buf::Anchor>
+        where Buf: 'a + WriteBuffer,
               Sc: Scope<'a>
     {
         let mut request: MPI_Request = unsafe { mem::uninitialized() };
@@ -261,7 +261,7 @@ pub unsafe trait Source: AsCommunicator {
                            tag,
                            self.as_communicator().as_raw(),
                            &mut request);
-            Request::from_raw(request, scope)
+            Request::from_raw_with(request, scope, buf.into_anchor())
         }
     }
 
@@ -275,11 +275,11 @@ pub unsafe trait Source: AsCommunicator {
     /// # Standard section(s)
     ///
     /// 3.7.2
-    fn immediate_receive_into<'a, Sc, Buf: ?Sized>(&self,
-                                                   scope: Sc,
-                                                   buf: &'a mut Buf)
-                                                   -> Request<'a, Sc>
-        where Buf: 'a + BufferMut,
+    fn immediate_receive_into<'a, Sc, Buf>(&self,
+                                           scope: Sc,
+                                           buf: Buf)
+                                           -> Request<'a, Sc, Buf::Anchor>
+        where Buf: 'a + WriteBuffer,
               Sc: Scope<'a>
     {
         self.immediate_receive_into_with_tag(scope, buf, unsafe_extern_static!(ffi::RSMPI_ANY_TAG))
@@ -1120,7 +1120,7 @@ pub struct ReceiveFuture<T> {
 impl<T> ReceiveFuture<T> where T: Equivalence {
     /// Wait for the receive operation to finish and return the received data.
     pub fn get(self) -> (T, Status) {
-        let status = self.req.wait();
+        let (status, _) = self.req.wait();
         if status.count(T::equivalent_datatype()) == 0 {
             panic!("Received an empty message into a ReceiveFuture.");
         }
@@ -1133,7 +1133,7 @@ impl<T> ReceiveFuture<T> where T: Equivalence {
     /// is returned.
     pub fn try(mut self) -> Result<(T, Status), Self> {
         match self.req.test() {
-            Ok(status) => {
+            Ok((status, _)) => {
                 if status.count(T::equivalent_datatype()) == 0 {
                     panic!("Received an empty message into a ReceiveFuture.");
                 }
