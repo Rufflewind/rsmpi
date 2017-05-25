@@ -52,7 +52,7 @@ pub type Rank = c_int;
 /// # Standard section(s)
 ///
 /// 6.4
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SystemCommunicator(MPI_Comm);
 
 impl SystemCommunicator {
@@ -104,6 +104,7 @@ impl AsCommunicator for SystemCommunicator {
 /// # Standard section(s)
 ///
 /// 6.4
+#[derive(Debug)]
 pub struct UserCommunicator(MPI_Comm);
 
 impl UserCommunicator {
@@ -431,7 +432,7 @@ impl From<c_int> for CommunicatorRelation {
 }
 
 /// Identifies a process by its `Rank` within a certain communicator.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Process<C>
     where C: Communicator
 {
@@ -470,6 +471,7 @@ impl<C> AsCommunicator for Process<C> where C: Communicator
 
 /// Identifies an arbitrary process that is a member of a certain communicator, e.g. for use as a
 /// `Source` in point to point communication.
+#[derive(Copy, Clone, Debug)]
 pub struct AnyProcess<C>(C) where C: Communicator;
 
 impl<C> AsCommunicator for AnyProcess<C> where C: Communicator
@@ -485,7 +487,7 @@ impl<C> AsCommunicator for AnyProcess<C> where C: Communicator
 /// # Standard section(s)
 ///
 /// 6.2.1
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SystemGroup(MPI_Group);
 
 impl SystemGroup {
@@ -509,6 +511,7 @@ impl Group for SystemGroup {}
 /// # Standard section(s)
 ///
 /// 6.2.1
+#[derive(Debug)]
 pub struct UserGroup(MPI_Group);
 
 impl Drop for UserGroup {

@@ -145,6 +145,7 @@ equivalent_system_datatype!(isize, ffi::RSMPI_INT64_T);
 /// # Standard section(s)
 ///
 /// 4
+#[derive(Debug)]
 pub struct UserDatatype(MPI_Datatype);
 
 impl UserDatatype {
@@ -651,6 +652,7 @@ impl<'a> DynBufferMut<'a> {
 /// Views can be used to instruct the underlying MPI library to rummage around at arbitrary
 /// locations in memory. This might be controlled later on using datatype bounds an slice lengths
 /// but for now, all View constructors are marked `unsafe`.
+#[derive(Debug)]
 pub struct View<'d, 'b, D, B: ?Sized>
     where D: 'd + Datatype,
           B: 'b + Pointer
@@ -720,6 +722,7 @@ unsafe impl<'d, 'b, D, B: ?Sized> Buffer for View<'d, 'b, D, B>
 /// Views can be used to instruct the underlying MPI library to rummage around at arbitrary
 /// locations in memory. This might be controlled later on using datatype bounds an slice lengths
 /// but for now, all View constructors are marked `unsafe`.
+#[derive(Debug)]
 pub struct MutView<'d, 'b, D, B: ?Sized>
     where D: 'd + Datatype,
           B: 'b + PointerMut
@@ -807,6 +810,7 @@ pub trait PartitionedBuffer: Partitioned + Pointer + AsDatatype { }
 pub trait PartitionedBufferMut: Partitioned + PointerMut + AsDatatype { }
 
 /// Adds a partitioning to an existing `Buffer` so that it becomes `Partitioned`
+#[derive(Debug)]
 pub struct Partition<'b, B: 'b + ?Sized, C, D> {
     buf: &'b B,
     counts: C,
@@ -866,6 +870,7 @@ impl<'b, B: ?Sized, C, D> PartitionedBuffer for Partition<'b, B, C, D>
 {}
 
 /// Adds a partitioning to an existing `BufferMut` so that it becomes `Partitioned`
+#[derive(Debug)]
 pub struct PartitionMut<'b, B: 'b + ?Sized, C, D> {
     buf: &'b mut B,
     counts: C,

@@ -823,6 +823,7 @@ impl fmt::Debug for Status {
 ///
 /// 3.8.2
 #[must_use]
+#[derive(Debug)]
 pub struct Message(MPI_Message);
 
 impl Message {
@@ -1112,6 +1113,7 @@ pub fn send_receive_replace_into<B: ?Sized, D, S>(buf: &mut B,
 
 /// Will contain a value of type `T` received via a non-blocking receive operation.
 #[must_use]
+#[derive(Debug)]
 pub struct ReceiveFuture<T> {
     val: Box<T>,
     req: Request<'static>,

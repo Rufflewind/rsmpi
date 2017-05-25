@@ -1348,7 +1348,7 @@ impl<'a, T: 'a + Operation> Operation for &'a T {}
 /// # Standard section(s)
 ///
 /// 5.9.2
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct SystemOperation(MPI_Op);
 
 macro_rules! system_operation_constructors {
