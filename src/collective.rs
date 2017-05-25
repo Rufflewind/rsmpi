@@ -1316,7 +1316,7 @@ pub trait Root: AsCommunicator
     }
 }
 
-impl<'a, C: 'a + Communicator> Root for Process<'a, C> {
+impl<C: Communicator> Root for Process<C> {
     fn root_rank(&self) -> Rank {
         self.rank()
     }

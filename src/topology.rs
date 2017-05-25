@@ -215,7 +215,7 @@ pub trait Communicator: AsRaw<Raw = MPI_Comm> {
     ///
     /// # Examples
     /// See `examples/broadcast.rs` `examples/gather.rs` `examples/send_receive.rs`
-    fn process_at_rank(&self, r: Rank) -> Process<Self>
+    fn process_at_rank(self, r: Rank) -> Process<Self>
         where Self: Sized
     {
         assert!(0 <= r && r < self.size());
@@ -224,14 +224,14 @@ pub trait Communicator: AsRaw<Raw = MPI_Comm> {
 
     /// Returns an `AnyProcess` identifier that can be used, e.g. as a `Source` in point to point
     /// communication.
-    fn any_process(&self) -> AnyProcess<Self>
+    fn any_process(self) -> AnyProcess<Self>
         where Self: Sized
     {
         AnyProcess(self)
     }
 
     /// A `Process` for the calling process
-    fn this_process(&self) -> Process<Self>
+    fn this_process(self) -> Process<Self>
         where Self: Sized
     {
         let rank = self.rank();
@@ -432,17 +432,17 @@ impl From<c_int> for CommunicatorRelation {
 
 /// Identifies a process by its `Rank` within a certain communicator.
 #[derive(Copy, Clone)]
-pub struct Process<'a, C>
-    where C: 'a + Communicator
+pub struct Process<C>
+    where C: Communicator
 {
-    comm: &'a C,
+    comm: C,
     rank: Rank
 }
 
-impl<'a, C> Process<'a, C> where C: 'a + Communicator
+impl<C> Process<C> where C: Communicator
 {
     #[allow(dead_code)]
-    fn by_rank(c: &'a C, r: Rank) -> Option<Self> {
+    fn by_rank(c: C, r: Rank) -> Option<Self> {
         if r != unsafe_extern_static!(ffi::RSMPI_PROC_NULL) {
             Some(Process { comm: c, rank: r })
         } else {
@@ -450,7 +450,7 @@ impl<'a, C> Process<'a, C> where C: 'a + Communicator
         }
     }
 
-    fn by_rank_unchecked(c: &'a C, r: Rank) -> Self {
+    fn by_rank_unchecked(c: C, r: Rank) -> Self {
         Process { comm: c, rank: r }
     }
 
@@ -460,23 +460,23 @@ impl<'a, C> Process<'a, C> where C: 'a + Communicator
     }
 }
 
-impl<'a, C> AsCommunicator for Process<'a, C> where C: 'a + Communicator
+impl<C> AsCommunicator for Process<C> where C: Communicator
 {
     type Out = C;
     fn as_communicator(&self) -> &Self::Out {
-        self.comm
+        &self.comm
     }
 }
 
 /// Identifies an arbitrary process that is a member of a certain communicator, e.g. for use as a
 /// `Source` in point to point communication.
-pub struct AnyProcess<'a, C>(&'a C) where C: 'a + Communicator;
+pub struct AnyProcess<C>(C) where C: Communicator;
 
-impl<'a, C> AsCommunicator for AnyProcess<'a, C> where C: 'a + Communicator
+impl<C> AsCommunicator for AnyProcess<C> where C: Communicator
 {
     type Out = C;
     fn as_communicator(&self) -> &Self::Out {
-        self.0
+        &self.0
     }
 }
 

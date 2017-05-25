@@ -408,14 +408,14 @@ pub unsafe trait Source: AsCommunicator {
     }
 }
 
-unsafe impl<'a, C> Source for AnyProcess<'a, C> where C: 'a + Communicator
+unsafe impl<C> Source for AnyProcess<C> where C: Communicator
 {
     fn source_rank(&self) -> Rank {
         unsafe_extern_static!(ffi::RSMPI_ANY_SOURCE)
     }
 }
 
-unsafe impl<'a, C> Source for Process<'a, C> where C: 'a + Communicator
+unsafe impl<C> Source for Process<C> where C: Communicator
 {
     fn source_rank(&self) -> Rank {
         self.rank()
@@ -769,7 +769,7 @@ pub trait Destination: AsCommunicator {
     }
 }
 
-impl<'a, C> Destination for Process<'a, C> where C: 'a + Communicator
+impl<C> Destination for Process<C> where C: Communicator
 {
     fn destination_rank(&self) -> Rank {
         self.rank()
