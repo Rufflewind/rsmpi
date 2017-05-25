@@ -44,6 +44,7 @@
 use std::{mem, slice};
 use std::borrow::Borrow;
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::os::raw::c_void;
 
 use conv::ConvUtil;
@@ -344,8 +345,7 @@ impl Datatype for UserDatatype {}
 
 /// A Datatype describes the layout of messages in memory.
 pub trait Datatype: AsRaw<Raw = MPI_Datatype> { }
-impl<'a, D> Datatype for &'a D where D: 'a + Datatype
-{}
+impl<D> Datatype for D where D: Deref, D::Target: Datatype {}
 
 /// Something that has an associated datatype
 pub unsafe trait AsDatatype {

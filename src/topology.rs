@@ -20,6 +20,7 @@
 //! - **7**: Process topologies
 //! - **Parts of sections**: 8, 10, 12
 use std::{mem, process};
+use std::ops::Deref;
 use std::os::raw::c_int;
 
 use super::Tag;
@@ -392,6 +393,8 @@ pub trait Communicator: AsRaw<Raw = MPI_Comm> {
         process::abort();
     }
 }
+
+impl<T> Communicator for T where T: Deref, T::Target: Communicator {}
 
 /// The relation between two communicators.
 ///

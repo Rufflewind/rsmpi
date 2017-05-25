@@ -1,5 +1,7 @@
 //! Bridge between rust types and raw values
 
+use std::ops::{Deref, DerefMut};
+
 /// Rust C bridge traits
 pub mod traits {
     pub use super::{AsRaw, AsRawMut};
@@ -13,11 +15,11 @@ pub unsafe trait AsRaw {
     fn as_raw(&self) -> Self::Raw;
 }
 
-unsafe impl<'a, T> AsRaw for &'a T where T: 'a + AsRaw
+unsafe impl<T> AsRaw for T where T: Deref, T::Target: AsRaw
 {
-    type Raw = <T as AsRaw>::Raw;
+    type Raw = <T::Target as AsRaw>::Raw;
     fn as_raw(&self) -> Self::Raw {
-        (*self).as_raw()
+        (**self).as_raw()
     }
 }
 
@@ -25,4 +27,11 @@ unsafe impl<'a, T> AsRaw for &'a T where T: 'a + AsRaw
 pub unsafe trait AsRawMut: AsRaw {
     /// A mutable pointer to the raw value
     fn as_raw_mut(&mut self) -> *mut <Self as AsRaw>::Raw;
+}
+
+unsafe impl<T> AsRawMut for T where T: DerefMut, T::Target: AsRawMut
+{
+    fn as_raw_mut(&mut self) -> *mut <Self as AsRaw>::Raw {
+        (**self).as_raw_mut()
+    }
 }
