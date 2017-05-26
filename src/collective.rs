@@ -188,6 +188,21 @@ pub trait CommunicatorCollectives: Communicator {
         }
     }
 
+    /// Like `all_reduce_into` but reuses the same buffer.
+    fn all_reduce_in_place<R: ?Sized, O>(&self, buf: &mut R, op: O)
+        where R: BufferMut,
+              O: Operation
+    {
+        unsafe {
+            ffi::MPI_Allreduce(ffi::RSMPI_IN_PLACE,
+                               buf.pointer_mut(),
+                               buf.count(),
+                               buf.as_datatype().as_raw(),
+                               op.as_raw(),
+                               self.as_raw());
+        }
+    }
+
     /// Performs an element-wise global reduction under the operation `op` of the input data in
     /// `sendbuf` and scatters the result into equal sized blocks in the receive buffers on all
     /// processes.

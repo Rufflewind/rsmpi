@@ -1,5 +1,8 @@
 #include "rsmpi.h"
 
+void *const RSMPI_BOTTOM = MPI_BOTTOM;
+void *const RSMPI_IN_PLACE = MPI_IN_PLACE;
+
 const MPI_Datatype RSMPI_FLOAT = MPI_FLOAT;
 const MPI_Datatype RSMPI_DOUBLE = MPI_DOUBLE;
 

@@ -2,6 +2,9 @@
 #define RSMPI_INCLUDED
 #include "mpi.h"
 
+extern void *const RSMPI_BOTTOM;
+extern void *const RSMPI_IN_PLACE;
+
 extern const MPI_Datatype RSMPI_FLOAT;
 extern const MPI_Datatype RSMPI_DOUBLE;
 
