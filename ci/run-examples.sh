@@ -2,8 +2,8 @@
 
 set -e
 
-EXAMPLES_DIR="examples"
-BINARIES_DIR="target/debug/examples"
+: ${EXAMPLES_DIR="examples"}
+: ${BINARIES_DIR="target/debug/examples"}
 
 if [ ! -d "${BINARIES_DIR}" ]
 then
