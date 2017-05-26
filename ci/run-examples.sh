@@ -18,7 +18,9 @@ printf "running %d examples\n" ${num_binaries}
 
 num_ok=0
 num_failed=0
-result="ok"
+ok='\033[32mok\033[0m'
+failed='\033[31mfailed\033[0m'
+result=${ok}
 
 for binary in ${binaries}
 do
@@ -27,13 +29,13 @@ do
   output_file=${binary}_output
   if (mpiexec -n ${num_proc} "${BINARIES_DIR}/${binary}" > "${output_file}" 2>&1)
   then
-    printf "ok\n"
+    printf "${ok}\n"
     num_ok=$((${num_ok} + 1))
   else
-    printf "output:\n"
+    printf "${failed} with output:\n"
     cat "${output_file}"
     num_failed=$((${num_failed} + 1))
-    result="failed"
+    result=${failed}
   fi
   rm -f "${output_file}"
 done
